@@ -6,24 +6,25 @@ and basic DOM parsing.
 
 References:
 
- + cheerio
-   - https://github.com/MatthewMueller/cheerio
-   - http://encosia.com/cheerio-faster-windows-friendly-alternative-jsdom/
-   - http://maxogden.com/scraping-with-node.html
++ cheerio
+- https://github.com/MatthewMueller/cheerio
+- http://encosia.com/cheerio-faster-windows-friendly-alternative-jsdom/
+- http://maxogden.com/scraping-with-node.html
 
- + commander.js
-   - https://github.com/visionmedia/commander.js
-   - http://tjholowaychuk.com/post/9103188408/commander-js-nodejs-command-line-interfaces-made-easy
++ commander.js
+- https://github.com/visionmedia/commander.js
+- http://tjholowaychuk.com/post/9103188408/commander-js-nodejs-command-line-interfaces-made-easy
 
- + JSON
-   - http://en.wikipedia.org/wiki/JSON
-   - https://developer.mozilla.org/en-US/docs/JSON
-   - https://developer.mozilla.org/en-US/docs/JSON#JSON_in_Firefox_2
++ JSON
+- http://en.wikipedia.org/wiki/JSON
+- https://developer.mozilla.org/en-US/docs/JSON
+- https://developer.mozilla.org/en-US/docs/JSON#JSON_in_Firefox_2
 */
 
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
 
@@ -36,6 +37,17 @@ var assertFileExists = function(infile) {
     return instr;
 };
 
+var assertUrlExists = function(inUrl) {
+    var instr = inUrl.toString();
+    rest.get(instr).on('complete', function(result) {
+     if (result instanceof Error) {
+     console.log('Error: ' + result.message);
+     process.exit(1);
+     }
+    });
+    return instr;
+};
+
 var cheerioHtmlFile = function(htmlfile) {
     return cheerio.load(fs.readFileSync(htmlfile));
 };
@@ -44,15 +56,28 @@ var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
 };
 
-var checkHtmlFile = function(htmlfile, checksfile) {
-    $ = cheerioHtmlFile(htmlfile);
-    var checks = loadChecks(checksfile).sort();
+var checkOut = function(checksfile) {
     var out = {};
+    var checks = loadChecks(checksfile);
+
     for(var ii in checks) {
         var present = $(checks[ii]).length > 0;
-        out[checks[ii]] = present;
-    }
-    return out;
+            out[checks[ii]] = present;
+        }
+        var outJson = JSON.stringify(out, null, 4);
+        console.log(outJson);
+};
+
+var checkHtmlFile = function(htmlfile, checksfile, url) {
+if (url) {
+     rest.get(url).on('complete', function(result) {
+     $ = cheerio.load(result);
+checkOut(checksfile);
+            });
+        } else {
+     $ = cheerioHtmlFile(htmlfile);
+   checkOut(checksfile);
+        }
 };
 
 var clone = function(fn) {
@@ -64,11 +89,10 @@ var clone = function(fn) {
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists),HTMLFILE_DEFAULT)
+        .option('-u, --url <url_path>', 'Url Path to web.js')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    checkHtmlFile(program.file, program.checks, program.url);
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
